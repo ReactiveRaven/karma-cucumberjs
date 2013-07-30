@@ -91,6 +91,7 @@ define(['source/adapter/cucumber_runner', 'spec/support/helper'], function (Cucu
 
       beforeEach(function () {
         spyOn(cucumberRunner, "getFeatureFilePaths");
+        spyOn(cucumberRunner, "parseSettingsFromFeature");
         featureFiles = ["/path/to/file.feature"];
         cucumberRunner.getFeatureFilePaths.andReturn(featureFiles);
       });
@@ -99,6 +100,12 @@ define(['source/adapter/cucumber_runner', 'spec/support/helper'], function (Cucu
         cucumberRunner.initialize();
 
         expect(cucumberRunner.getFeatureFilePaths).toHaveBeenCalled();
+      });
+      
+      it('parses the feature files for settings-comments', function () {
+        cucumberRunner.initialize();
+        
+        expect(cucumberRunner.parseSettingsFromFeature).toHaveBeenCalled();
       });
 
       describe('when there are no feature files', function () {
@@ -130,6 +137,100 @@ define(['source/adapter/cucumber_runner', 'spec/support/helper'], function (Cucu
           expect(featureFiles.forEach).toHaveBeenCalledWith(cucumberRunner.loadFeature);
         });
       });
+    });
+    
+    describe('parseSettingsFromFeature()', function () {
+      
+      it('returns an array', function () {
+        var result = cucumberRunner.parseSettingsFromFeature('');
+        
+        expect(result).toEqual([]);
+      })
+      
+      describe('When a settings-comment is found before a feature', function () {
+        it('sets the options on the first feature found', function () {
+          var input = [
+            '#karma-cucumberjs allowPending',
+            'Feature: feature_1',
+            '  Scenario: scenario_1',
+            '  Scenario: scenario_2'
+          ].join("\n");
+          var result = cucumberRunner.parseSettingsFromFeature(input);
+          
+          expect(result.feature_1).not.toBe(undefined); 
+          expect(result.feature_1.scenario_1).toEqual(['allowPending']);
+          expect(result.feature_1.scenario_2).toEqual(['allowPending']);
+        });
+        
+        describe('When there are no features or scenarios defined in the file', function () {
+          it('silently drops any settings-comments found', function () {
+            var input = [
+              '#karma-cucumberjs allowPending'
+            ].join("\n");
+            var result = cucumberRunner.parseSettingsFromFeature(input);
+
+            expect(result).toEqual([]);
+          });
+        });
+      });
+      
+      it('does not validate settings names', function () {
+        var input = [
+          'Feature: feature_1',
+          '#karma-cucumberjs fish and chips',
+          '  Scenario: scenario_1'
+        ].join('\n');
+        var result = cucumberRunner.parseSettingsFromFeature(input);
+        
+        expect(result.feature_1.scenario_1).toEqual(['fish','and','chips']);
+      });
+      
+      describe('When there are multiple scenarios and features', function () {
+        var input = [
+          '#karma-cucumberjs featureSetting',
+          'Feature: feature_1',
+          '  description text can contain comment like bits',
+          '  as long as not on own line, eg: #karma-cucumberjs allowPending',
+          '',
+          '  Scenario: scenario_1',
+          '    #karma-cucumberjs onlyOnFirst',
+          '    When x',
+          '    Then y',
+          '  Scenario: scenario_2',
+          '    When y',
+          '    Then z',
+          '',
+          'Feature: feature_2',
+          '',
+          '  Scenario: scenario_1',
+          '    When z',
+          '    Then a'
+        ].join('\n'),
+        result = null;
+        
+        beforeEach(function () {
+          result = cucumberRunner.parseSettingsFromFeature(input)
+        });
+        
+        it('generates a structure for each scenario', function () {
+          expect(result.feature_1.scenario_1).not.toBe(undefined);
+          expect(result.feature_1.scenario_2).not.toBe(undefined);
+          expect(result.feature_2.scenario_1).not.toBe(undefined);
+        });
+        
+        it('applies settings attached to the feature to all contained scenarios', function () {
+          expect(result.feature_1.scenario_1).toContain('featureSetting');
+          expect(result.feature_1.scenario_2).toContain('featureSetting');
+          expect(result.feature_2.scenario_1).not.toContain('featureSetting');
+        });
+        
+        it('does not apply settings attached to specific scenarios to other scenarios', function () {
+          expect(result.feature_1.scenario_1).toContain('onlyOnFirst');
+          expect(result.feature_2.scenario_1).not.toContain('onlyOnFirst');
+        });
+      });
+      
+      
     });
 
     describe('getFeatureFilePaths()', function () {
@@ -195,6 +296,14 @@ define(['source/adapter/cucumber_runner', 'spec/support/helper'], function (Cucu
         var expectedFeaturesList = [[featureFilePath, featureFileContents]];
         expect(cucumberRunner.features).toEqual(expectedFeaturesList);
       });
+      
+      it('parses the file for settings', function () {
+        spyOn(cucumberRunner, "parseSettingsFromFeature");
+        
+        cucumberRunner.loadFeature(featureFilePath);
+        
+        expect(cucumberRunner.parseSettingsFromFeature).toHaveBeenCalled();
+      })
     });
 
     describe('startCucumberRun()', function () {
@@ -217,9 +326,14 @@ define(['source/adapter/cucumber_runner', 'spec/support/helper'], function (Cucu
       });
 
       it('starts a KarmaListener to add to Cucumber', function () {
+        
+        var featureSettings = {hello: "hello"};
+        
+        cucumberRunner.featureSettings = featureSettings;
         cucumberRunner.startCucumberRun();
+        
 
-        expect(CucumberRunner.KarmaListener).toHaveBeenCalledWith(karma);
+        expect(CucumberRunner.KarmaListener).toHaveBeenCalledWith(karma, featureSettings); 
       });
 
       it('adds the KarmaListener to Cucumber', function () {

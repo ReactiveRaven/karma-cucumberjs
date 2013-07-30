@@ -8,6 +8,7 @@
       supportCodeHelper: null,
 
       features: [],
+      featureSettings: [],
       karmaFiles: karma.files,
 
       initialize: function initialize() {
@@ -33,12 +34,79 @@
       loadFeature: function loadFeature(featureFilePath) {
         var fileContents = fileLoader.loadFile(featureFilePath);
         self.features.push([featureFilePath, fileContents]);
+        self.featureSettings = self.parseSettingsFromFeature(fileContents, self.featureSettings);
+      },
+              
+      parseSettingsFromFeature: function parseSettingsFromFeature(fileContents, settings) {
+        var lines = fileContents.trim().split("\n"),
+            currentFeature = null,
+            currentScenario = null,
+            settingsSeenScenario = [],
+            settingsSeenFeature = [],
+            regexes = {
+              comment: /^\s*#karma-cucumberjs ?(.+)$/i,
+              feature: /^\s*Feature: ?(.+)$/i,
+              scenario: /^\s*Scenario: ?(.+)$/i
+            };
+            
+        if (!settings) {
+          settings = {};
+        }
+            
+        var applySeen = function () {
+          if (currentScenario && currentFeature) {
+            if (!settings[currentFeature]) {
+              settings[currentFeature] = {};
+            }
+            if (!settings[currentFeature][currentScenario]) {
+              settings[currentFeature][currentScenario] = [];
+            }
+            settings[currentFeature][currentScenario] = settings[currentFeature][currentScenario].concat(settingsSeenScenario).concat(settingsSeenFeature);
+          }
+        };
+
+        lines.forEach(function (line) {
+          var result = false;
+          if ((result = regexes.feature.exec(line))) {
+            var featureName = result[1].trim();
+            applySeen();
+            if (currentFeature !== null) {
+              settingsSeenFeature = [];
+            }
+            if (currentScenario !== null) {
+              settingsSeenScenario = [];
+            }
+            currentFeature = featureName;
+            currentScenario = null;
+            
+          }
+          else if ((result = regexes.scenario.exec(line))) {
+            var scenarioName = result[1].trim();
+            applySeen();
+            if (currentScenario !== null) {
+              settingsSeenScenario = [];
+            }
+            currentScenario = scenarioName;
+          }
+          else if ((result = regexes.comment.exec(line))) {
+            var comments = result[1].trim().split(" ");
+            if (!currentScenario || !currentFeature) {
+              settingsSeenFeature = settingsSeenFeature.concat(comments);
+            } else {
+              settingsSeenScenario = settingsSeenScenario.concat(comments);
+            }
+          }
+        });
+        
+        applySeen();
+        
+        return settings;
       },
 
       startCucumberRun: function startCucumberRun() {
         var cucumber = CucumberRunner.Cucumber(self.features, self.stepDefinitionsFunction);
         cucumber.attachListener(CucumberRunner.HtmlListener());
-        cucumber.attachListener(CucumberRunner.KarmaListener(karma));
+        cucumber.attachListener(CucumberRunner.KarmaListener(karma, self.featureSettings));
         cucumber.attachListener(CucumberRunner.Cucumber.Listener.PrettyFormatter({
           logToConsole: false,
           logToFunction: self.prettyFormatterLogger

@@ -1,5 +1,5 @@
 (function (global) {
-  var KarmaListener = function KarmaListener(karma) {
+  var KarmaListener = function KarmaListener(karma, karmaCucumberJsSettings) {
     var self = {
       currentStep: null,
       currentScenario: null,
@@ -9,6 +9,7 @@
       scenarioLog: [],
       totalSteps: 0,
       eventMap: null,
+      settings: null,
 
       hear: function hear(event, callback) {
         if (!self.eventMap) {
@@ -68,7 +69,27 @@
       },
 
       checkStepSuccess: function checkStepSuccess(stepResult) {
-        return self.scenarioSuccess && stepResult.isSuccessful();
+        var result = (self.scenarioSuccess &&
+          (stepResult.isSuccessful() ||
+            (self.shouldAcceptPending() && stepResult.isPending())
+          )
+        );
+          
+        return result;
+      },
+              
+      shouldAcceptPending: function shouldAcceptPending() {
+        var result = !!(self.settings &&
+          self.currentFeature &&
+          self.currentFeature.getName &&
+          self.settings[self.currentFeature.getName()] &&
+          self.currentScenario &&
+          self.currentScenario.getName &&
+          self.settings[self.currentFeature.getName()][self.currentScenario.getName()] &&
+          self.settings[self.currentFeature.getName()][self.currentScenario.getName()].indexOf("allowPending") >= 0
+        );
+
+        return result;
       },
 
       checkStepSkipped: function checkStepSkipped(stepResult) {
@@ -108,6 +129,8 @@
         return '[object KarmaListener]';
       }
     };
+    
+    self.settings = karmaCucumberJsSettings;
 
     return self;
   };

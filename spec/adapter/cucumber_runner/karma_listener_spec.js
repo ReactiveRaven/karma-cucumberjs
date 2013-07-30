@@ -1,10 +1,18 @@
 define(['source/adapter/cucumber_runner/karma_listener', 'spec/support/helper'], function (KarmaListener, helper) {
   describe('KarmaListener()', function () {
-    var karmaListener, karma;
+    var karmaListener, karma, settings;
 
     beforeEach(function () {
       karma = helper.createSpyWithStubs('karma', {info: null, result: null});
-      karmaListener = KarmaListener(karma);
+      
+      settings = {
+        "featurename": {
+          "scenarioname": [
+            "allowPending"
+          ]
+        }
+      };
+      karmaListener = KarmaListener(karma, settings);
     });
 
     describe('constructor', function () {
@@ -35,6 +43,10 @@ define(['source/adapter/cucumber_runner/karma_listener', 'spec/support/helper'],
       it('sets the totalSteps back to 0', function () {
         expect(karmaListener.totalSteps).toBe(0);
       });
+      
+      it('sets the settings to the given object', function () {
+        expect(karmaListener.settings).toBe(settings);
+      })
 
       it('returns a KarmaListener object', function () {
         expect(karmaListener.toString()).toEqual('[object KarmaListener]');
@@ -287,7 +299,88 @@ define(['source/adapter/cucumber_runner/karma_listener', 'spec/support/helper'],
         };
         expect(karma.result).toHaveBeenCalledWith(expectedResults);
       });
+      
+      describe('with setting \'allowPending\' on the current step', function () {
+        
+        var event, result, scenarioSkippedResult, stepSuccessful, scenarioTimeElapsed, settings, stepPending;
+        
+        beforeEach(function () {
+          
+          var currentFeatureName = "feature name",
+              currentScenarioName = "scenario name",
+              options = ["allowPending"];
+          
+          settings = {};
+          settings[currentFeatureName] = {};
+          settings[currentFeatureName][currentScenarioName] = options;
+          karmaListener = KarmaListener(karma, settings);
+          
+          
+          result = helper.createSpyWithStubs('step result payload item', {isPending: true, isSuccessful: false, isSkipped: true});
+          event = helper.createSpyWithStubs('event', {getPayloadItem: result});
+
+          karmaListener.currentScenario = helper.createSpyWithStubs('current scenario reference', {getName: currentScenarioName});
+          karmaListener.currentFeature = helper.createSpyWithStubs('current feature reference', {getName: currentFeatureName});
+
+          //spyOn(karmaListener, 'checkStepSuccess');
+          //spyOn(karmaListener, 'checkStepSkipped');
+          //spyOn(karmaListener, 'checkStepFailure');
+          spyOn(karmaListener, 'getScenarioTimeElapsed');
+
+//          scenarioSkippedResult = true;
+//          karmaListener.checkStepSkipped.andReturn(scenarioSkippedResult);
+//
+//          stepSuccessful = false;
+//          karmaListener.checkStepSuccess.andReturn(stepSuccessful);
+
+          scenarioTimeElapsed = 'time elapsed during scenario';
+          karmaListener.getScenarioTimeElapsed.andReturn(scenarioTimeElapsed);
+        });
+        
+        it('reports a pending step as successful to Karma', function () {
+          karmaListener.stepResult(event);
+          var expectedResults = {
+            description: 'scenario name',
+            log: karmaListener.scenarioLog,
+            suite: ['feature name'],
+            success: true,
+            skipped: true,
+            time: scenarioTimeElapsed
+          };
+          expect(result.isPending).toHaveBeenCalled();
+          expect(karma.result).toHaveBeenCalledWith(expectedResults);
+        });
+        
+      })
+      
     });
+    
+    describe('shouldAcceptPending()', function () {
+      var settings, currentFeatureName, currentScenarioName, options;
+      
+      beforeEach(function () {
+        currentFeatureName = "feature name";
+        currentScenarioName = "scenario name";
+        options = ["allowPending"];
+
+        settings = {};
+        settings[currentFeatureName] = {};
+        settings[currentFeatureName][currentScenarioName] = options;
+        karmaListener.settings = settings;
+        karmaListener.currentScenario = helper.createSpyWithStubs('current scenario reference', {getName: currentScenarioName});
+        karmaListener.currentFeature = helper.createSpyWithStubs('current feature reference', {getName: currentFeatureName});
+      });
+      
+      it('should accept pending tasks as successful when told to', function () {
+        expect(karmaListener.shouldAcceptPending()).toBe(true);
+      });
+      
+      it('should not accept pending tasks as successful by default', function () {
+        karmaListener.settings = {};
+        
+        expect(karmaListener.shouldAcceptPending()).toBe(false);
+      });
+    })
 
     describe('checkStepSuccess()', function () {
       var stepResult;

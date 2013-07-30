@@ -38,6 +38,10 @@ addStepDefinitions(function (scenario) {
       callback.fail('The box was not green, Expected: ' + boxColor + ' to be "rgb(0, 128, 0)"');
     }
   });
+  
+  scenario.Given(/^a step is pending$/, function (callback) {
+    callback.pending();
+  });
 
   scenario.When(/^the user clicks on the box$/, function(callback) {
     box.click();
