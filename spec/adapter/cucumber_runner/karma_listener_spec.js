@@ -322,16 +322,7 @@ define(['source/adapter/cucumber_runner/karma_listener', 'spec/support/helper'],
           karmaListener.currentScenario = helper.createSpyWithStubs('current scenario reference', {getName: currentScenarioName});
           karmaListener.currentFeature = helper.createSpyWithStubs('current feature reference', {getName: currentFeatureName});
 
-          //spyOn(karmaListener, 'checkStepSuccess');
-          //spyOn(karmaListener, 'checkStepSkipped');
-          //spyOn(karmaListener, 'checkStepFailure');
           spyOn(karmaListener, 'getScenarioTimeElapsed');
-
-//          scenarioSkippedResult = true;
-//          karmaListener.checkStepSkipped.andReturn(scenarioSkippedResult);
-//
-//          stepSuccessful = false;
-//          karmaListener.checkStepSuccess.andReturn(stepSuccessful);
 
           scenarioTimeElapsed = 'time elapsed during scenario';
           karmaListener.getScenarioTimeElapsed.andReturn(scenarioTimeElapsed);
